@@ -44,6 +44,77 @@ tabRegister.addEventListener('click', () => {
     authSubmit.innerText = 'REGISTRAR';
 });
 
+async function handleSuccessfulLogin(token, fallbackUser = '', fallbackSkin = 'Pachin poderoso.png') {
+    jwtToken = token;
+    if (token) {
+        localStorage.setItem('pachin_jwt_token', token);
+    }
+
+    try {
+        const meRes = await fetch(API_URL + '/me', {
+            headers: { 'Authorization': 'Bearer ' + jwtToken }
+        });
+        if (meRes.ok) {
+            const me = await meRes.json();
+            selectedSkin = me.skin || fallbackSkin;
+            loggedUsername = me.username || fallbackUser;
+        } else {
+            selectedSkin = fallbackSkin;
+            loggedUsername = fallbackUser;
+        }
+    } catch (_) {
+        selectedSkin = fallbackSkin;
+        loggedUsername = fallbackUser;
+    }
+
+    if (loggedUsername) {
+        localStorage.setItem('pachin_logged_username', loggedUsername);
+    }
+
+    authScreen.style.display = 'none';
+    wrapper.style.display = 'block';
+
+    if (imagesLoaded >= totalImages) {
+        showMainMenu();
+    } else {
+        loadImages(); // calls showMainMenu() when done
+    }
+}
+
+async function checkSavedSession() {
+    const savedToken = localStorage.getItem('pachin_jwt_token');
+    const savedUser  = localStorage.getItem('pachin_logged_username');
+    if (!savedToken) return;
+
+    try {
+        const meRes = await fetch(API_URL + '/me', {
+            headers: { 'Authorization': 'Bearer ' + savedToken }
+        });
+        if (meRes.ok) {
+            const me = await meRes.json();
+            await handleSuccessfulLogin(savedToken, me.username || savedUser, me.skin);
+        } else {
+            localStorage.removeItem('pachin_jwt_token');
+            localStorage.removeItem('pachin_logged_username');
+        }
+    } catch (_) {
+        // Offline or starting up
+    }
+}
+
+function logoutUser() {
+    localStorage.removeItem('pachin_jwt_token');
+    localStorage.removeItem('pachin_logged_username');
+    jwtToken = null;
+    loggedUsername = '';
+    wrapper.style.display = 'none';
+    authScreen.style.display = 'flex';
+    authPassword.value = '';
+    authMessage.innerText = 'Sesión cerrada correctamente.';
+    authMessage.style.color = '#15803d';
+    fetchAndShowPublicLeaderboard();
+}
+
 authForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const endpoint = isLoginMode ? '/login' : '/register';
@@ -53,35 +124,19 @@ authForm.addEventListener('submit', async (e) => {
         const res = await fetch(API_URL + endpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: authUsername.value, password: authPassword.value })
+            body: JSON.stringify({ username: authUsername.value.trim(), password: authPassword.value })
         });
         const data = await res.json();
         if (res.ok) {
             if (isLoginMode) {
-                jwtToken = data.token || data.access_token;
-                // Fetch skin preference
-                try {
-                    const meRes = await fetch(API_URL + '/me', {
-                        headers: { 'Authorization': 'Bearer ' + jwtToken }
-                    });
-                    if (meRes.ok) {
-                        const me = await meRes.json();
-                        selectedSkin = me.skin || 'Pachin poderoso.png';
-                        loggedUsername = me.username;
-                    }
-                } catch (_) {}
-
-                authScreen.style.display = 'none';
-                wrapper.style.display = 'block';
-
-                if (imagesLoaded >= totalImages) {
-                    showMainMenu();
-                } else {
-                    loadImages(); // calls showMainMenu() when done
-                }
+                await handleSuccessfulLogin(data.token, authUsername.value.trim(), data.skin);
             } else {
                 authMessage.innerText = 'Registro exitoso. Ahora inicia sesión.';
-                authMessage.style.color = '#00ff00';
+                authMessage.style.color = '#15803d';
+                isLoginMode = true;
+                tabLogin.classList.add('active');
+                tabRegister.classList.remove('active');
+                authSubmit.innerText = 'ENTRAR';
             }
         } else {
             authMessage.innerText = data.error || data.message || 'Error de autenticación';
@@ -1617,7 +1672,14 @@ async function fetchAndShowPublicLeaderboard() {
     }
 }
 
+// --- LOGOUT BUTTON ---
+const btnLogout = document.getElementById('btn-logout');
+if (btnLogout) {
+    btnLogout.addEventListener('click', logoutUser);
+}
+
 // --- INIT ---
 fetchAndShowPublicLeaderboard();
+checkSavedSession();
 requestAnimationFrame(gameLoop); // Start loop for animated auth bg
 // loadImages() is called after successful login

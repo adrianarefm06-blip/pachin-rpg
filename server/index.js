@@ -3,6 +3,7 @@ const cors = require('cors');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const db = require('./database');
+const dbService = require('./db-service');
 const dotenv = require('dotenv');
 const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
@@ -114,100 +115,117 @@ app.post('/register', authLimiter, validateCredentials, async (req, res) => {
     const { username, password } = req.body;
 
     try {
+        const existingUser = await dbService.getUserByUsername(username);
+        if (existingUser) {
+            return res.status(409).json({ error: 'Username already exists' });
+        }
+
         const hashedPassword = await bcrypt.hash(password, 10);
-        const stmt = db.prepare('INSERT INTO users (username, password) VALUES (?, ?)');
-        stmt.run([username, hashedPassword], function (err) {
-            if (err) {
-                if (err.message.includes('UNIQUE constraint failed')) {
-                    return res.status(409).json({ error: 'Username already exists' });
-                }
-                return res.status(500).json({ error: 'Database error' });
-            }
-            res.status(201).json({ message: 'User registered successfully', userId: this.lastID });
-        });
-        stmt.finalize();
+        const newUser = await dbService.createUser(username, hashedPassword);
+        res.status(201).json({ message: 'User registered successfully', userId: newUser.userId });
     } catch (error) {
+        if (error.message && error.message.includes('UNIQUE constraint failed')) {
+            return res.status(409).json({ error: 'Username already exists' });
+        }
+        console.error('Register error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
 
 // POST /login
-app.post('/login', authLimiter, validateCredentials, (req, res) => {
+app.post('/login', authLimiter, validateCredentials, async (req, res) => {
     const { username, password } = req.body;
 
-    db.get('SELECT * FROM users WHERE username = ?', [username], async (err, user) => {
-        if (err) return res.status(500).json({ error: 'Database error' });
+    try {
+        const user = await dbService.getUserByUsername(username);
         if (!user) return res.status(401).json({ error: 'Invalid credentials' });
 
-        try {
-            const match = await bcrypt.compare(password, user.password);
-            if (!match) return res.status(401).json({ error: 'Invalid credentials' });
+        const match = await bcrypt.compare(password, user.password);
+        if (!match) return res.status(401).json({ error: 'Invalid credentials' });
 
-            const token = jwt.sign({ userId: user.id, username: user.username }, JWT_SECRET, { expiresIn: '1h' });
-            res.json({ message: 'Login successful', token });
-        } catch (error) {
-            res.status(500).json({ error: 'Internal server error' });
-        }
-    });
+        // Update last login timestamp asynchronously
+        dbService.updateUserLogin(user.id).catch(console.error);
+
+        const token = jwt.sign(
+            { userId: user.id, username: user.username },
+            JWT_SECRET,
+            { expiresIn: '7d' }
+        );
+        res.json({
+            message: 'Login successful',
+            token,
+            username: user.username,
+            skin: user.skin || 'Pachin poderoso.png'
+        });
+    } catch (error) {
+        console.error('Login error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 });
 
 // POST /leaderboard
-app.post('/leaderboard', authenticateToken, (req, res) => {
+app.post('/leaderboard', authenticateToken, async (req, res) => {
     const { best_time_ms, skin } = req.body;
     const userId = req.user.userId;
 
-    if (best_time_ms === undefined || typeof best_time_ms !== 'number') {
-        return res.status(400).json({ error: 'best_time_ms is required and must be a number' });
+    if (best_time_ms === undefined || typeof best_time_ms !== 'number' || best_time_ms <= 0) {
+        return res.status(400).json({ error: 'best_time_ms is required and must be a positive number' });
     }
 
     const validSkins = ['Pachin poderoso.png', 'pachin espadachin.png', 'pachin ladron.png', 'pachin mago.png'];
     const scoreSkin = skin && validSkins.includes(skin) ? skin : 'Pachin poderoso.png';
 
-    const stmt = db.prepare('INSERT INTO leaderboard (user_id, best_time_ms, skin) VALUES (?, ?, ?)');
-    stmt.run([userId, best_time_ms, scoreSkin], function (err) {
-        if (err) return res.status(500).json({ error: 'Database error' });
-        res.status(201).json({ message: 'Score saved successfully', scoreId: this.lastID });
-    });
-    stmt.finalize();
+    try {
+        const result = await dbService.saveScore(userId, best_time_ms, scoreSkin);
+        res.status(201).json({ message: 'Score saved successfully', scoreId: result.scoreId });
+    } catch (error) {
+        console.error('Leaderboard save error:', error);
+        res.status(500).json({ error: 'Database error' });
+    }
 });
 
 // GET /leaderboard
-app.get('/leaderboard', leaderboardLimiter, (req, res) => {
-    const query = `
-        SELECT u.username, MIN(l.best_time_ms) as best_time_ms, l.skin
-        FROM leaderboard l
-        JOIN users u ON l.user_id = u.id
-        GROUP BY u.id
-        ORDER BY best_time_ms ASC
-        LIMIT 10
-    `;
-
-    db.all(query, [], (err, rows) => {
-        if (err) return res.status(500).json({ error: 'Database error' });
+app.get('/leaderboard', leaderboardLimiter, async (req, res) => {
+    try {
+        const rows = await dbService.getTopLeaderboard(10);
         res.json(rows);
-    });
+    } catch (error) {
+        console.error('Leaderboard fetch error:', error);
+        res.status(500).json({ error: 'Database error' });
+    }
 });
 
 // GET /me - Returns logged user profile
-app.get('/me', authenticateToken, (req, res) => {
-    db.get('SELECT username, skin FROM users WHERE id = ?', [req.user.userId], (err, user) => {
-        if (err) return res.status(500).json({ error: 'Database error' });
+app.get('/me', authenticateToken, async (req, res) => {
+    try {
+        const user = await dbService.getUserById(req.user.userId);
         if (!user) return res.status(404).json({ error: 'User not found' });
-        res.json({ username: user.username, skin: user.skin || 'Pachin poderoso.png' });
-    });
+        res.json({
+            username: user.username,
+            skin: user.skin || 'Pachin poderoso.png',
+            created_at: user.created_at,
+            last_login: user.last_login
+        });
+    } catch (error) {
+        console.error('Me endpoint error:', error);
+        res.status(500).json({ error: 'Database error' });
+    }
 });
 
 // PUT /skin - Save user skin preference
 const validSkins = ['Pachin poderoso.png', 'pachin espadachin.png', 'pachin ladron.png', 'pachin mago.png'];
-app.put('/skin', authenticateToken, (req, res) => {
+app.put('/skin', authenticateToken, async (req, res) => {
     const { skin } = req.body;
     if (!skin || !validSkins.includes(skin)) {
         return res.status(400).json({ error: 'Invalid skin selection' });
     }
-    db.run('UPDATE users SET skin = ? WHERE id = ?', [skin, req.user.userId], function(err) {
-        if (err) return res.status(500).json({ error: 'Database error' });
+    try {
+        await dbService.updateUserSkin(req.user.userId, skin);
         res.json({ message: 'Skin updated successfully', skin });
-    });
+    } catch (error) {
+        console.error('Skin update error:', error);
+        res.status(500).json({ error: 'Database error' });
+    }
 });
 
 // --- Serve Static Game Files (Production / Standalone Mode) ---

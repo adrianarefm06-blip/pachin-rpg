@@ -6,3 +6,5 @@ server/.env
 staging_deploy/
 .DS_Store
 Thumbs.db
+*.db-shm
+*.db-wal
