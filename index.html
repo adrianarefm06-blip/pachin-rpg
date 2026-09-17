@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pachin - Capítulo 1: El Despertar de Magolo</title>
+    <meta name="description" content="Pachin RPG - Aventura de exploración de mazmorras con combates por turnos">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- ============================================================ -->
+    <!--  AUTH SCREEN (outside wrapper, animated full-screen overlay) -->
+    <!-- ============================================================ -->
+    <div id="auth-screen" class="premium-overlay">
+        <div class="auth-particles" aria-hidden="true">
+            <span></span><span></span><span></span><span></span>
+            <span></span><span></span><span></span><span></span>
+            <span></span><span></span><span></span><span></span>
+            <span></span><span></span><span></span>
+        </div>
+
+        <div class="auth-container glass-card">
+            <!-- Left: Login/Register form -->
+            <div class="auth-panel">
+                <h1 class="glow-title">PACHIN</h1>
+                <p class="auth-subtitle">Inicia sesión para jugar</p>
+                <div class="auth-tabs">
+                    <button id="tab-login" class="tab-btn active">Login</button>
+                    <button id="tab-register" class="tab-btn">Registro</button>
+                </div>
+                <form id="auth-form">
+                    <div class="input-group">
+                        <input type="text" id="auth-username" required placeholder=" " autocomplete="username">
+                        <label>Nombre de Usuario</label>
+                    </div>
+                    <div class="input-group">
+                        <input type="password" id="auth-password" required placeholder=" " autocomplete="current-password">
+                        <label>Contraseña</label>
+                    </div>
+                    <button type="submit" id="auth-submit" class="cyber-btn">ENTRAR</button>
+                    <p id="auth-message" class="auth-message"></p>
+                </form>
+            </div>
+
+            <!-- Right: Public leaderboard -->
+            <div class="public-leaderboard-panel">
+                <h2 class="glow-title small">RÉCORDS MUNDIALES</h2>
+                <div class="leaderboard-container">
+                    <ul id="public-leaderboard-list">
+                        <div class="loader small-loader"></div>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!--  LEADERBOARD MODAL (works globally)                          -->
+    <!-- ============================================================ -->
+    <div id="leaderboard-screen" class="premium-overlay" style="display: none;">
+        <div class="glass-card leaderboard-card">
+            <h1 class="glow-title small">LEADERBOARD</h1>
+            <p class="auth-subtitle">Los mejores tiempos</p>
+            <div class="leaderboard-container">
+                <ul id="leaderboard-list"></ul>
+            </div>
+            <button id="btn-close-leaderboard" class="cyber-btn secondary">Volver</button>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!--  CUSTOMIZE MODAL                                             -->
+    <!-- ============================================================ -->
+    <div id="modal-customize" class="premium-overlay" style="display: none;">
+        <div class="glass-card customize-card">
+            <h2 class="glow-title small">ELIGE TU PERSONAJE</h2>
+            <p class="auth-subtitle">Selecciona tu avatar para la aventura</p>
+            <div id="skin-grid" class="skin-grid"></div>
+            <div class="customize-actions">
+                <button id="btn-save-skin" class="cyber-btn">GUARDAR</button>
+                <button id="btn-close-customize" class="cyber-btn secondary">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!--  GAME WRAPPER                                                -->
+    <!-- ============================================================ -->
+    <div id="game-wrapper" style="display: none;">
+        <canvas id="gameCanvas" width="1584" height="672"></canvas>
+
+        <!-- UI Overlay Layer -->
+        <div id="ui-layer">
+
+            <!-- Loading Screen -->
+            <div id="screen-loading" class="screen active">
+                <h2 class="pulsing text-shadow">Cargando Mundo...</h2>
+                <div class="loader"></div>
+            </div>
+
+            <!-- ★ MAIN MENU (new) -->
+            <div id="screen-mainmenu" class="screen">
+                <div class="mainmenu-container">
+                    <div class="mainmenu-logo-area">
+                        <h1 class="game-title menu-title-anim">PACHIN</h1>
+                        <p class="subtitle">Capítulo 1: El Despertar de Magolo</p>
+                        <p id="menu-username" class="menu-welcome"></p>
+                    </div>
+                    <div class="mainmenu-buttons">
+                        <button id="btn-play" class="menu-btn menu-btn-primary">
+                            <span class="menu-btn-icon">⚔️</span>
+                            <span>Comenzar Aventura</span>
+                        </button>
+                        <button id="btn-leaderboard-menu" class="menu-btn menu-btn-secondary">
+                            <span class="menu-btn-icon">🏆</span>
+                            <span>Clasificaciones Mundiales</span>
+                        </button>
+                        <button id="btn-customize" class="menu-btn menu-btn-secondary">
+                            <span class="menu-btn-icon">🎭</span>
+                            <span>Personalizar Personaje</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Intro/Story Screen -->
+            <div id="screen-intro" class="screen">
+                <h2 class="section-title">LA LEYENDA</h2>
+                <div class="story-box">
+                    <p id="story-text"></p>
+                    <div class="story-image-container">
+                        <img id="story-image" src="" alt="Story visual" />
+                    </div>
+                </div>
+                <div class="story-actions" style="display: flex; gap: 12px; margin-top: 15px; justify-content: center; width: 100%;">
+                    <button id="btn-next-story" class="nintendo-btn small">CONTINUAR</button>
+                    <button id="btn-skip-story" class="nintendo-btn small" style="background: rgba(255, 255, 255, 0.15); color: #fff; border: 1px solid rgba(255, 255, 255, 0.3);">SALTAR</button>
+                </div>
+            </div>
+
+            <!-- Game HUD -->
+            <div id="screen-hud" class="screen">
+                <div class="hud-top-bar">
+                    <div class="health-container">
+                        <div class="health-label" id="hud-player-name">Pachin</div>
+                        <div class="health-bar-bg">
+                            <div id="health-bar-fill" class="health-bar-fill"></div>
+                            <div id="health-bar-trail" class="health-bar-trail"></div>
+                        </div>
+                        <div id="health-text" class="health-text">30 / 30 HP</div>
+                    </div>
+                    <!-- Floor indicator (HTML) -->
+                    <div class="floor-container">
+                        <span id="hud-floor-text" class="floor-text">PISO 1 / 5</span>
+                    </div>
+                    <div class="timer-container">
+                        <div id="game-timer" class="game-timer-text">00:00</div>
+                    </div>
+                </div>
+                <div id="log-container" class="log-container"></div>
+            </div>
+
+            <!-- Battle Screen -->
+            <div id="screen-battle" class="screen">
+                <!-- ⏩ Speed btn: center top -->
+                <button id="btn-fast-forward" class="fast-forward-btn">⏩ x1</button>
+
+                <!-- Enemy HUD (Top Right) -->
+                <div class="battle-hud enemy-hud">
+                    <div class="hud-info">
+                        <span id="enemy-battle-name" class="battle-name">Enemigo</span>
+                        <span id="enemy-battle-level" class="battle-level">Nv 1</span>
+                    </div>
+                    <div class="health-bar-bg">
+                        <div id="enemy-battle-hp-fill" class="health-bar-fill"></div>
+                    </div>
+                </div>
+
+                <!-- Player HUD (Top Left) -->
+                <div class="battle-hud player-hud">
+                    <div class="hud-info">
+                        <span class="battle-name">Pachin</span>
+                        <span id="player-battle-level" class="battle-level">Nv 1</span>
+                    </div>
+                    <div class="health-bar-bg">
+                        <div id="player-battle-hp-fill" class="health-bar-fill"></div>
+                        <div id="player-battle-hp-trail" class="health-bar-trail"></div>
+                    </div>
+                    <div class="battle-hp-text" id="player-battle-hp-text">30/30</div>
+                    <div class="xp-bar-bg">
+                        <div id="player-battle-xp-fill" class="xp-bar-fill"></div>
+                    </div>
+                </div>
+
+                <!-- Battle Dialog and Menu (Bottom Centered) -->
+                <div class="battle-ui-bottom">
+                    <div id="battle-dialog" class="battle-dialog">¡Un enemigo salvaje aparece!</div>
+                    <div id="battle-menu" class="battle-menu"></div>
+                </div>
+            </div>
+
+            <!-- Game Over Screen -->
+            <div id="screen-gameover" class="screen">
+                <div class="modal-box">
+                    <h1 class="game-over-title">FIN DE LA PARTIDA</h1>
+                    <p>Has sido derrotado por los horrores de la cueva.</p>
+                    <img src="Personajes/Enemigos/esquelitik.png" class="char-img shake-anim" alt="Derrota" />
+                    <button id="btn-restart" class="nintendo-btn">VOLVER AL MENÚ</button>
+                </div>
+            </div>
+
+            <!-- Victory Screen -->
+            <div id="screen-victory" class="screen">
+                <div class="modal-box victory-box">
+                    <h1 class="victory-title">¡ESCAPASTE!</h1>
+                    <p>Has sobrevivido a la oscuridad. Continuará en el Capítulo 2...</p>
+                    <p id="victory-time-text" style="font-size: 1.5rem; color: #ffd700; margin-bottom: 5px;">Tiempo: 00:00</p>
+                    <p id="victory-character-text" style="font-size: 1.2rem; color: #fff; margin-bottom: 20px;">Personaje: Pachin</p>
+                    <img src="Personajes/Jugadores/Pachin poderoso.png" id="victory-player-img" class="char-img bounce-anim" alt="Victoria" />
+                    <button id="btn-view-leaderboard" class="nintendo-btn">VER LEADERBOARD</button>
+                    <button id="btn-continue" class="nintendo-btn small" style="margin-top: 15px;">VOLVER AL MENÚ</button>
+                </div>
+            </div>
+
+        </div><!-- /ui-layer -->
+
+        <!-- Screen effects -->
+        <div id="vignette"></div>
+    </div><!-- /game-wrapper -->
+
+    <script src="audio.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>
